@@ -170,7 +170,7 @@ roc(y_c ~ predict.glm(glm(y_c~x, family = binomial(link = 'logit')), type ='resp
 
 
 #Fitted Probit
-roc(y_l ~ predict.glm(glm(y_l~x, family = binomial(link = 'probit')), type ='response'), plot = T, print.auc = T, main = 'True Logit\nFitted Logit') |> suppressMessages()
+roc(y_l ~ predict.glm(glm(y_l~x, family = binomial(link = 'probit')), type ='response'), plot = T, print.auc = T, main = 'True Logit\nFitted Probit') |> suppressMessages()
 
 roc(y_p ~ predict.glm(glm(y_p~x, family = binomial(link = 'probit')), type ='response'), plot = T, print.auc = T, main = 'True Probit\nFitted Probit') |> suppressMessages()
 
@@ -178,7 +178,7 @@ roc(y_c ~ predict.glm(glm(y_c~x, family = binomial(link = 'probit')), type ='res
 
 
 #Fitted C-log-log
-roc(y_l ~ predict.glm(glm(y_l~x, family = binomial(link = 'cloglog')), type ='response'), plot = T, print.auc = T, main = 'True Logit\nFitted Logit') |> suppressMessages()
+roc(y_l ~ predict.glm(glm(y_l~x, family = binomial(link = 'cloglog')), type ='response'), plot = T, print.auc = T, main = 'True Logit\nFitted C-Log-Log') |> suppressMessages()
 
 roc(y_p ~ predict.glm(glm(y_p~x, family = binomial(link = 'cloglog')), type ='response'), plot = T, print.auc = T, main = 'True Probit\nFitted C-Log-Log') |> suppressMessages()
 
@@ -205,6 +205,7 @@ ggplot(mapping = aes(x = auc$cols, y = auc$rows,
   labs(title = 'AUC', x = 'True Model', y = 'Fitted Model', fill = 'AUC') +
   coord_equal() +
   scale_y_discrete(limits = rev) +
+  scale_fill_gradient(low = '#99D4E9' , high = '#2483A5') +
   theme_bw() +
   theme(axis.title.y = element_text(angle = 0, vjust = 0.5),
         plot.title = element_text(hjust = 0.5))
