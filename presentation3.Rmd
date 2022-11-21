@@ -1,0 +1,213 @@
+---
+title: "STAT 892 Group Presentation"
+author: "Tyler Wiederich, Wyatt McLeod, Aaron Schram, Neetu Regmi, Madison King"
+date: "`r Sys.Date()`"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Cross Validation of Models
+
+```{r, echo=FALSE}
+five_fold = function(x, y, threshold = 0.5, epsilon = 1e-14){
+  require(pROC)
+  
+  #Location of predicted values from models
+  yhat_l = numeric()
+  yhat_p = numeric()
+  yhat_c = numeric()
+  
+  for(i in 1:5){
+    
+    #Split data
+    y_id = rep(1:5, each = 100)
+    ytrain = y[y_id != i]
+    ytest = y[y_id == i]
+    
+    xtrain = as.data.frame(x[y_id != i, -1])
+    xtest = as.data.frame(x[y_id == i, -1])
+    
+    
+    
+    #Fitting the three models
+    fit_logit = glm(ytrain ~ ., family = binomial(link = 'logit'),
+                epsilon = epsilon, data = xtrain)
+    fit_probit = glm(ytrain ~ ., family = binomial(link = 'probit'),
+                epsilon = epsilon, data = xtrain)
+    fit_cloglog = glm(ytrain ~ ., family = binomial(link = 'cloglog'),
+                epsilon = epsilon, data = xtrain)
+
+    
+    
+    #Predicted probabilities
+    pihat_l = predict.glm(fit_logit, newdata = xtest, type = 'response')
+    pihat_p = predict.glm(fit_probit, newdata = xtest, type = 'response')
+    pihat_c = predict.glm(fit_cloglog, newdata = xtest, type = 'response')
+    
+    
+    
+    #Predicted y value with threshold of 0.5
+    temp_yhat_l = ifelse(pihat_l >= threshold, 1, 0)
+    temp_yhat_p = ifelse(pihat_p >= threshold, 1, 0)
+    temp_yhat_c = ifelse(pihat_c >= threshold, 1, 0)
+    
+    yhat_l = append(yhat_l, temp_yhat_l)
+    yhat_p = append(yhat_p, temp_yhat_p)
+    yhat_c = append(yhat_c, temp_yhat_c)
+    
+  }
+  
+  #Confusion matrix
+    cmatrix_l = table(yhat_l, y)
+    cmatrix_p = table(yhat_p, y)
+    cmatrix_c = table(yhat_c, y)
+    
+  #ROC
+    roc_l <- roc(y ~ predict.glm(glm(y~x, family = binomial(link = 'logit')), type ='response'), plot = F, print.auc = T) |> suppressMessages()
+    roc_p <- roc(y ~ predict.glm(glm(y~x, family = binomial(link = 'probit')), type ='response'), plot = F, print.auc = T) |> suppressMessages()
+    roc_c <- roc(y ~ predict.glm(glm(y~x, family = binomial(link = 'cloglog')), type ='response'), plot = F, print.auc = T) |> suppressMessages()
+    
+    
+    
+    res = list(logit = list(confusion_matrix = cmatrix_l, auc = as.numeric(roc_l$auc)),
+               probit = list(confusion_matrix = cmatrix_p, auc = as.numeric(roc_p$auc)),
+               cloglog = list(confusion_matrix = cmatrix_c, auc = as.numeric(roc_c$auc)))
+    return(res)
+}
+```
+
+For the comparison of models, we are using `five_fold()`. This function will perform the following:
+
+-   Split data into five different training-test sets
+-   Fit `glm()` with logit, probit, and cloglog links
+-   Create a confusion matrix using the predicted results for each link
+-   Produce ROC across the entire dataset (no training-test sets) for each link
+
+## True Logistic Model
+
+$$\pi = \frac{e^{x\beta}}{1+e^{x\beta}}$$
+
+```{r message=FALSE, warning=FALSE}
+set.seed(5326)
+n = 500; p = 5
+x = cbind(1, t(replicate(n = n, expr = rnorm(n = p))))
+beta = matrix(c(1.5, 3.7, -1.5, 4, -0.8, -4.2),
+              ncol = 1)
+xb = x %*% beta
+
+pi = exp(xb)/(1+exp(xb))
+y_l = rbinom(n = n, size = 1, prob = pi)
+res_logit = five_fold(x, y_l)
+```
+
+## True Probit Model
+
+$$\pi=\Phi(x\beta)$$
+
+```{r, warning=FALSE}
+set.seed(5326)
+n = 500; p = 5
+x = cbind(1, t(replicate(n = n, expr = rnorm(n = p))))
+beta = matrix(c(1.5, 3.7, -1.5, 4, -0.8, -4.2),
+              ncol = 1)
+xb = x %*% beta
+
+pi = pnorm(xb)
+y_p = rbinom(n = n, size = 1, prob = pi)
+res_probit = five_fold(x, y_p)
+```
+
+## True Complimentary Log Log
+
+$$\pi=1-e^{-e^{x\beta}}$$
+
+```{r, warning=FALSE}
+set.seed(5326)
+n = 500; p = 5
+x = cbind(1, t(replicate(n = n, expr = rnorm(n = p))))
+beta = matrix(c(1.5, 3.7, -1.5, 4, -0.8, -4.2),
+              ncol = 1)
+xb = x %*% beta
+
+pi = 1-exp(-exp(xb))
+y_c = rbinom(n = n, size = 1, prob = pi)
+res_cloglog = five_fold(x, y_c)
+```
+
+
+
+## Summary of Results
+
+```{r, echo=FALSE}
+dat = rbind(
+  cbind(res_logit[[1]][[1]], res_probit[[1]][[1]], res_cloglog[[1]][[1]]),
+  cbind(res_logit[[2]][[1]], res_probit[[2]][[1]], res_cloglog[[2]][[1]]),
+  cbind(res_logit[[3]][[1]], res_probit[[3]][[1]], res_cloglog[[3]][[1]])
+)
+
+library(kableExtra)
+kable(dat, align = 'c') %>% 
+  add_header_above(c('Fitted Model' = 1, 'Logit' = 2, 'Probit' = 2, 'C-Log-Log' = 2)) %>% 
+  add_header_above(c(' ' = 1, 'True Model' = 6)) %>% 
+  pack_rows(index = c('Logit' = 2, 'Probit' = 2, 'C-Log-Log' = 2)) %>% 
+  kable_styling(font_size = 16)
+```
+
+## ROC Plots
+
+```{r message=FALSE, warning=FALSE, echo=FALSE, results='hide'}
+par(mfrow = c(3,3))
+
+#Fitted Logit
+roc(y_l ~ predict.glm(glm(y_l~x, family = binomial(link = 'logit')), type ='response'), plot = T, print.auc = T, main = 'True Logit\nFitted Logit') |> suppressMessages()
+
+roc(y_p ~ predict.glm(glm(y_p~x, family = binomial(link = 'logit')), type ='response'), plot = T, print.auc = T, main = 'True Probit\nFitted Logit') |> suppressMessages()
+
+roc(y_c ~ predict.glm(glm(y_c~x, family = binomial(link = 'logit')), type ='response'), plot = T, print.auc = T, main = 'True C-log-log\nFitted Logit') |> suppressMessages()
+
+
+#Fitted Probit
+roc(y_l ~ predict.glm(glm(y_l~x, family = binomial(link = 'probit')), type ='response'), plot = T, print.auc = T, main = 'True Logit\nFitted Logit') |> suppressMessages()
+
+roc(y_p ~ predict.glm(glm(y_p~x, family = binomial(link = 'probit')), type ='response'), plot = T, print.auc = T, main = 'True Probit\nFitted Probit') |> suppressMessages()
+
+roc(y_c ~ predict.glm(glm(y_c~x, family = binomial(link = 'probit')), type ='response'), plot = T, print.auc = T, main = 'True C-Log-Log\nFitted Probit') |> suppressMessages()
+
+
+#Fitted C-log-log
+roc(y_l ~ predict.glm(glm(y_l~x, family = binomial(link = 'cloglog')), type ='response'), plot = T, print.auc = T, main = 'True Logit\nFitted Logit') |> suppressMessages()
+
+roc(y_p ~ predict.glm(glm(y_p~x, family = binomial(link = 'cloglog')), type ='response'), plot = T, print.auc = T, main = 'True Probit\nFitted C-Log-Log') |> suppressMessages()
+
+roc(y_c ~ predict.glm(glm(y_c~x, family = binomial(link = 'cloglog')), type ='response'), plot = T, print.auc = T, main = 'True C-Log-Log\nFitted C-Log-Log') |> suppressMessages()
+```
+
+
+## AUC Values
+
+```{r, echo=FALSE}
+rc = expand.grid(cols = c('Logit', 'Probit', 'C-Log-Log'), 
+                 rows = c('Logit', 'Probit', 'C-Log-Log'))
+
+vals = as.numeric(c(res_logit$logit[2], res_probit$logit[2], res_cloglog$logit[2],
+             res_logit$probit[2], res_probit$probit[2], res_cloglog$probit[2],
+             res_logit$cloglog[2], res_probit$cloglog[2], res_cloglog$cloglog[2]))
+
+auc = cbind(rc, vals)
+library(ggplot2)
+ggplot(mapping = aes(x = auc$cols, y = auc$rows,
+                     fill = auc$vals)) +
+  geom_tile() +
+  geom_label(mapping = aes(label = round(auc$vals, 3))) +
+  labs(title = 'AUC', x = 'True Model', y = 'Fitted Model', fill = 'AUC') +
+  coord_equal() +
+  scale_y_discrete(limits = rev) +
+  theme_bw() +
+  theme(axis.title.y = element_text(angle = 0, vjust = 0.5),
+        plot.title = element_text(hjust = 0.5))
+
+```
+
